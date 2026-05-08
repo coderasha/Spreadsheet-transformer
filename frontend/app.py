@@ -1,8 +1,8 @@
 import streamlit as st
-from frontend.pages.upload import render_upload_page
-from frontend.pages.transform import render_transform_page
-from frontend.pages.formatting import render_formatting_page
-from frontend.pages.export import render_export_page
+from pages.upload import render_upload_page
+from pages.transform import render_transform_page
+from pages.formatting import render_formatting_page
+from pages.export import render_export_page
 
 st.set_page_config(
     page_title="Spreadsheet Transformer",
