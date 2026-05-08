@@ -1,0 +1,11 @@
+streamlit
+streamlit-aggrid
+fastapi
+uvicorn
+pandas
+openpyxl
+xlsxwriter
+numpy
+python-multipart
+requests
+pydantic
