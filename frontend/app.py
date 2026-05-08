@@ -1,13 +1,18 @@
 import streamlit as st
-from pages.upload import render_upload_page
-from pages.transform import render_transform_page
-from pages.formatting import render_formatting_page
-from pages.export import render_export_page
+
+from views.upload import render_upload_page
+from views.transform import render_transform_page
+from views.export import render_export_page
+
+from state.session import init_session
+
 
 st.set_page_config(
     page_title="Spreadsheet Transformer",
     layout="wide"
 )
+
+init_session()
 
 st.sidebar.title("Navigation")
 
@@ -16,7 +21,6 @@ page = st.sidebar.radio(
     [
         "Upload",
         "Transform",
-        "Formatting",
         "Export"
     ]
 )
@@ -26,9 +30,6 @@ if page == "Upload":
 
 elif page == "Transform":
     render_transform_page()
-
-elif page == "Formatting":
-    render_formatting_page()
 
 elif page == "Export":
     render_export_page()
