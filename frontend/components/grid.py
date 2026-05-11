@@ -9,7 +9,11 @@ import streamlit as st
 
 def render_grid():
 
-    df = st.session_state.df.copy()
+    current_sheet = st.session_state.current_sheet
+
+    df = st.session_state.workbook[
+        current_sheet
+    ].copy()
 
     # Remove AG Grid internal columns
     df = df.loc[
@@ -45,10 +49,11 @@ def render_grid():
 
     updated_df = grid_response["data"]
 
-    # Remove AG Grid internal columns again
     updated_df = updated_df.loc[
         :,
         ~updated_df.columns.astype(str).str.startswith("::")
     ]
 
-    st.session_state.df = updated_df
+    st.session_state.workbook[
+        current_sheet
+    ] = updated_df

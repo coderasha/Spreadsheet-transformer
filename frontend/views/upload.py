@@ -13,12 +13,19 @@ def render_upload_page():
 
     if uploaded_file:
 
-        # CSV Handling
+        # CSV FILE
         if uploaded_file.name.endswith(".csv"):
 
             df = pd.read_csv(uploaded_file)
 
-            st.session_state.df = df
+            st.session_state.workbook = {
+                "Sheet1": df
+            }
+
+            st.session_state.sheet_names = ["Sheet1"]
+
+            st.session_state.current_sheet = "Sheet1"
+
             st.session_state.uploaded = True
 
             st.success("CSV Uploaded Successfully")
@@ -27,31 +34,26 @@ def render_upload_page():
 
             return
 
-        # Excel Workbook Handling
-        excel_file = pd.ExcelFile(uploaded_file)
-
-        sheet_names = excel_file.sheet_names
-
-        st.subheader("Select Worksheet")
-
-        selected_sheet = st.selectbox(
-            "Available Sheets",
-            sheet_names
+        # EXCEL WORKBOOK
+        workbook = pd.read_excel(
+            uploaded_file,
+            sheet_name=None
         )
 
-        if st.button("Load Selected Sheet"):
+        st.session_state.workbook = workbook
 
-            df = pd.read_excel(
-                uploaded_file,
-                sheet_name=selected_sheet
-            )
+        st.session_state.sheet_names = list(
+            workbook.keys()
+        )
 
-            st.session_state.df = df
-            st.session_state.uploaded = True
-            st.session_state.selected_sheet = selected_sheet
+        st.session_state.current_sheet = (
+            st.session_state.sheet_names[0]
+        )
 
-            st.success(
-                f"Sheet '{selected_sheet}' Loaded Successfully"
-            )
+        st.session_state.uploaded = True
 
-            st.dataframe(df)
+        st.success("Workbook Uploaded Successfully")
+
+        st.subheader("Available Worksheets")
+
+        st.write(st.session_state.sheet_names)

@@ -1,4 +1,6 @@
 import streamlit as st
+import pandas as pd
+
 from natsort import index_natsorted
 
 from components.grid import render_grid
@@ -6,17 +8,31 @@ from components.grid import render_grid
 
 def render_transform_page():
 
-    st.title("Transform Data")
+    st.title("Transform Workbook")
+
+    # =========================================================
+    # CHECK UPLOAD
+    # =========================================================
 
     if not st.session_state.uploaded:
-        st.warning("Please upload a file first")
+        st.warning("Please upload a workbook first")
         return
 
     # =========================================================
-    # CLEAN DATAFRAME
+    # SELECT WORKSHEET
     # =========================================================
 
-    df = st.session_state.df
+    selected_sheet = st.selectbox(
+        "Select Worksheet",
+        st.session_state.sheet_names,
+        index=st.session_state.sheet_names.index(
+            st.session_state.current_sheet
+        )
+    )
+
+    st.session_state.current_sheet = selected_sheet
+
+    df = st.session_state.workbook[selected_sheet]
 
     # Remove AG Grid internal columns
     df = df.loc[
@@ -24,15 +40,42 @@ def render_transform_page():
         ~df.columns.astype(str).str.startswith("::")
     ]
 
-    st.session_state.df = df
+    st.session_state.workbook[selected_sheet] = df
 
     valid_columns = list(df.columns)
+
+    # =========================================================
+    # APPLY SCOPE
+    # =========================================================
+
+    st.subheader("Apply Changes To")
+
+    apply_scope = st.radio(
+        "Transformation Scope",
+        [
+            "Current Worksheet",
+            "Selected Worksheets",
+            "All Worksheets"
+        ]
+    )
+
+    selected_sheets = []
+
+    if apply_scope == "Selected Worksheets":
+
+        selected_sheets = st.multiselect(
+            "Choose Worksheets",
+            st.session_state.sheet_names,
+            default=[selected_sheet]
+        )
 
     # =========================================================
     # EDITABLE GRID
     # =========================================================
 
-    st.subheader("Editable Spreadsheet")
+    st.subheader(
+        f"Editing Worksheet: {selected_sheet}"
+    )
 
     render_grid()
 
@@ -61,39 +104,59 @@ def render_transform_page():
 
     if st.button("Apply Transformation"):
 
-        if operation == "UPPERCASE":
+        if apply_scope == "Current Worksheet":
+            target_sheets = [selected_sheet]
 
-            st.session_state.df[column] = (
-                st.session_state.df[column]
-                .astype(str)
-                .str.upper()
-            )
+        elif apply_scope == "Selected Worksheets":
+            target_sheets = selected_sheets
 
-        elif operation == "lowercase":
+        else:
+            target_sheets = st.session_state.sheet_names
 
-            st.session_state.df[column] = (
-                st.session_state.df[column]
-                .astype(str)
-                .str.lower()
-            )
+        for sheet in target_sheets:
 
-        elif operation == "Title Case":
+            sheet_df = st.session_state.workbook[sheet]
 
-            st.session_state.df[column] = (
-                st.session_state.df[column]
-                .astype(str)
-                .str.title()
-            )
+            if column not in sheet_df.columns:
+                continue
 
-        elif operation == "Trim Spaces":
+            if operation == "UPPERCASE":
 
-            st.session_state.df[column] = (
-                st.session_state.df[column]
-                .astype(str)
-                .str.strip()
-            )
+                sheet_df[column] = (
+                    sheet_df[column]
+                    .astype(str)
+                    .str.upper()
+                )
 
-        st.success("Transformation Applied Successfully")
+            elif operation == "lowercase":
+
+                sheet_df[column] = (
+                    sheet_df[column]
+                    .astype(str)
+                    .str.lower()
+                )
+
+            elif operation == "Title Case":
+
+                sheet_df[column] = (
+                    sheet_df[column]
+                    .astype(str)
+                    .str.title()
+                )
+
+            elif operation == "Trim Spaces":
+
+                sheet_df[column] = (
+                    sheet_df[column]
+                    .astype(str)
+                    .str.strip()
+                )
+
+            st.session_state.workbook[sheet] = sheet_df
+
+        st.success(
+            "Transformation Applied Successfully"
+        )
 
         st.rerun()
 
@@ -103,7 +166,9 @@ def render_transform_page():
     # REARRANGE COLUMNS & RENAME HEADERS
     # =========================================================
 
-    st.subheader("Rearrange Columns & Rename Headers")
+    st.subheader(
+        "Rearrange Columns & Rename Headers"
+    )
 
     column_config = []
 
@@ -143,41 +208,56 @@ def render_transform_page():
 
     if st.button("Apply Column Changes"):
 
-        # Sort by serial number
         column_config = sorted(
             column_config,
             key=lambda x: x["serial"]
         )
 
-        # Ordered columns
         ordered_columns = [
             item["old_name"]
             for item in column_config
         ]
 
-        # Keep only valid columns
-        ordered_columns = [
-            col for col in ordered_columns
-            if col in st.session_state.df.columns
-        ]
-
-        # Rearrange dataframe
-        st.session_state.df = (
-            st.session_state.df[ordered_columns]
-        )
-
-        # Rename mapping
         rename_mapping = {
             item["old_name"]: item["new_name"]
             for item in column_config
         }
 
-        # Rename headers
-        st.session_state.df = (
-            st.session_state.df.rename(
-                columns=rename_mapping
+        if apply_scope == "Current Worksheet":
+            target_sheets = [selected_sheet]
+
+        elif apply_scope == "Selected Worksheets":
+            target_sheets = selected_sheets
+
+        else:
+            target_sheets = st.session_state.sheet_names
+
+        for sheet in target_sheets:
+
+            sheet_df = st.session_state.workbook[sheet]
+
+            valid_sheet_columns = [
+                col for col in ordered_columns
+                if col in sheet_df.columns
+            ]
+
+            updated_df = (
+                sheet_df[valid_sheet_columns]
             )
-        )
+
+            applicable_rename_mapping = {
+                k: v
+                for k, v in rename_mapping.items()
+                if k in updated_df.columns
+            }
+
+            updated_df = updated_df.rename(
+                columns=applicable_rename_mapping
+            )
+
+            st.session_state.workbook[sheet] = (
+                updated_df
+            )
 
         st.success(
             "Columns Rearranged & Renamed Successfully"
@@ -209,17 +289,20 @@ def render_transform_page():
         ascending = sort_order == "Ascending"
 
         sorted_index = index_natsorted(
-            st.session_state.df[sort_column]
-            .astype(str)
+            df[sort_column].astype(str)
         )
 
         if not ascending:
             sorted_index = list(reversed(sorted_index))
 
-        st.session_state.df = (
-            st.session_state.df.iloc[sorted_index]
+        updated_df = (
+            df.iloc[sorted_index]
             .reset_index(drop=True)
         )
+
+        st.session_state.workbook[
+            selected_sheet
+        ] = updated_df
 
         st.success("Rows Sorted Successfully")
 
@@ -228,12 +311,99 @@ def render_transform_page():
     st.divider()
 
     # =========================================================
-    # DATA PREVIEW
+    # MERGE WORKSHEETS
     # =========================================================
 
-    st.subheader("Current Data Preview")
+    st.subheader("Merge Worksheets")
+
+    merge_scope = st.radio(
+        "Merge Scope",
+        [
+            "Selected Worksheets",
+            "All Worksheets"
+        ],
+        key="merge_scope"
+    )
+
+    merge_sheets = []
+
+    if merge_scope == "Selected Worksheets":
+
+        merge_sheets = st.multiselect(
+            "Select Worksheets To Merge",
+            st.session_state.sheet_names,
+            default=st.session_state.sheet_names
+        )
+
+    else:
+
+        merge_sheets = st.session_state.sheet_names
+
+    merged_sheet_name = st.text_input(
+        "New Merged Worksheet Name",
+        value="Final_Merged_Sheet"
+    )
+
+    if st.button("Merge Worksheets"):
+
+        valid_dfs = []
+
+        for sheet in merge_sheets:
+
+            sheet_df = st.session_state.workbook[sheet]
+
+            # Remove AG Grid internal columns
+            sheet_df = sheet_df.loc[
+                :,
+                ~sheet_df.columns.astype(str)
+                .str.startswith("::")
+            ]
+
+            valid_dfs.append(sheet_df)
+
+        if len(valid_dfs) == 0:
+
+            st.error("No worksheets selected")
+
+        else:
+
+            merged_df = pd.concat(
+                valid_dfs,
+                ignore_index=True
+            )
+
+            st.session_state.workbook[
+                merged_sheet_name
+            ] = merged_df
+
+            if merged_sheet_name not in (
+                st.session_state.sheet_names
+            ):
+
+                st.session_state.sheet_names.append(
+                    merged_sheet_name
+                )
+
+            st.session_state.current_sheet = (
+                merged_sheet_name
+            )
+
+            st.success(
+                f"Worksheets merged into "
+                f"'{merged_sheet_name}' successfully"
+            )
+
+            st.rerun()
+
+    st.divider()
+
+    # =========================================================
+    # CURRENT WORKSHEET PREVIEW
+    # =========================================================
+
+    st.subheader("Current Worksheet Preview")
 
     st.dataframe(
-        st.session_state.df,
+        st.session_state.workbook[selected_sheet],
         use_container_width=True
     )

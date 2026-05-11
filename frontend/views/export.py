@@ -6,32 +6,91 @@ from io import BytesIO
 
 def render_export_page():
 
-    st.title("Export Spreadsheet")
+    st.title("Export Workbook")
 
     if not st.session_state.uploaded:
-        st.warning("Upload a file first")
+        st.warning("Upload a workbook first")
         return
 
-    df = st.session_state.df
-
-    # Remove AG Grid internal columns
-    df = df.loc[
-        :,
-        ~df.columns.astype(str).str.startswith("::")
-    ]
-
-    st.subheader("Select Export Format")
-
-    export_format = st.radio(
-        "Export Type",
-        ["Excel (.xlsx)", "CSV (.csv)"]
+    export_scope = st.radio(
+        "Export Scope",
+        [
+            "Current Worksheet",
+            "Selected Worksheets",
+            "Entire Workbook"
+        ]
     )
 
-    # =========================================================
-    # EXCEL EXPORT
-    # =========================================================
+    current_sheet = st.session_state.current_sheet
 
-    if export_format == "Excel (.xlsx)":
+    selected_sheets = []
+
+    if export_scope == "Selected Worksheets":
+
+        selected_sheets = st.multiselect(
+            "Choose Worksheets",
+            st.session_state.sheet_names,
+            default=[current_sheet]
+        )
+
+    export_format = st.radio(
+        "Export Format",
+        [
+            "Excel (.xlsx)",
+            "CSV (.csv)"
+        ]
+    )
+
+    # CURRENT WORKSHEET
+    if export_scope == "Current Worksheet":
+
+        df = st.session_state.workbook[current_sheet]
+
+        if export_format == "CSV (.csv)":
+
+            csv_data = df.to_csv(
+                index=False
+            ).encode("utf-8")
+
+            st.download_button(
+                label="Download CSV",
+                data=csv_data,
+                file_name=f"{current_sheet}.csv",
+                mime="text/csv"
+            )
+
+        else:
+
+            output = BytesIO()
+
+            with pd.ExcelWriter(
+                output,
+                engine="openpyxl"
+            ) as writer:
+
+                df.to_excel(
+                    writer,
+                    sheet_name=current_sheet,
+                    index=False
+                )
+
+            st.download_button(
+                label="Download Excel",
+                data=output.getvalue(),
+                file_name=f"{current_sheet}.xlsx",
+                mime=(
+                    "application/vnd.openxmlformats-officedocument"
+                    ".spreadsheetml.sheet"
+                )
+            )
+
+    # MULTIPLE / ALL WORKSHEETS
+    else:
+
+        if export_scope == "Selected Worksheets":
+            sheets_to_export = selected_sheets
+        else:
+            sheets_to_export = st.session_state.sheet_names
 
         output = BytesIO()
 
@@ -40,34 +99,22 @@ def render_export_page():
             engine="openpyxl"
         ) as writer:
 
-            df.to_excel(
-                writer,
-                index=False
-            )
+            for sheet in sheets_to_export:
+
+                df = st.session_state.workbook[sheet]
+
+                df.to_excel(
+                    writer,
+                    sheet_name=sheet,
+                    index=False
+                )
 
         st.download_button(
-            label="Download Excel File",
+            label="Download Workbook",
             data=output.getvalue(),
-            file_name="transformed.xlsx",
+            file_name="transformed_workbook.xlsx",
             mime=(
                 "application/vnd.openxmlformats-officedocument"
                 ".spreadsheetml.sheet"
             )
-        )
-
-    # =========================================================
-    # CSV EXPORT
-    # =========================================================
-
-    elif export_format == "CSV (.csv)":
-
-        csv_data = df.to_csv(
-            index=False
-        ).encode("utf-8")
-
-        st.download_button(
-            label="Download CSV File",
-            data=csv_data,
-            file_name="transformed.csv",
-            mime="text/csv"
         )
