@@ -73,11 +73,186 @@ def render_transform_page():
     # EDITABLE GRID
     # =========================================================
 
+    preview_sheet = selected_sheet
+
+    if apply_scope == "Selected Worksheets":
+
+        preview_sheet = st.selectbox(
+            "Preview Worksheet",
+            selected_sheets,
+            index=0,
+            key="preview_sheet_selector"
+        )
+
+    elif apply_scope == "All Worksheets":
+
+        preview_sheet = st.selectbox(
+            "Preview Worksheet",
+            st.session_state.sheet_names,
+            index=0,
+            key="preview_all_sheet_selector"
+        )
+
+    st.session_state.current_sheet = preview_sheet
+
     st.subheader(
-        f"Editing Worksheet: {selected_sheet}"
+        f"Editing Worksheet: {preview_sheet}"
     )
 
     render_grid()
+
+    # Refresh dataframe after preview change
+    df = st.session_state.workbook[preview_sheet]
+
+    valid_columns = list(df.columns)
+
+    st.divider()
+
+    # =========================================================
+    # CREATE CALCULATED COLUMN
+    # =========================================================
+
+    st.subheader("Create Calculated Column")
+
+    new_calc_column = st.text_input(
+        "New Calculated Column Name"
+    )
+
+    calc_col1 = st.selectbox(
+        "First Column",
+        valid_columns,
+        key="calc_col1"
+    )
+
+    calc_operation = st.selectbox(
+        "Operation",
+        [
+            "Addition (+)",
+            "Subtraction (-)",
+            "Multiplication (*)",
+            "Division (/)"
+        ]
+    )
+
+    calc_col2 = st.selectbox(
+        "Second Column",
+        valid_columns,
+        key="calc_col2"
+    )
+
+    new_column_position = st.number_input(
+        "Column Position",
+        min_value=1,
+        max_value=len(df.columns) + 1,
+        value=len(df.columns) + 1,
+        key="calc_position"
+    )
+
+    if st.button("Create Calculated Column"):
+
+        updated_df = df.copy()
+
+        # Convert to numeric
+        col1 = pd.to_numeric(
+            updated_df[calc_col1],
+            errors="coerce"
+        )
+
+        col2 = pd.to_numeric(
+            updated_df[calc_col2],
+            errors="coerce"
+        )
+
+        # Perform operation
+        if calc_operation == "Addition (+)":
+
+            updated_df[new_calc_column] = (
+                col1 + col2
+            )
+
+        elif calc_operation == "Subtraction (-)":
+
+            updated_df[new_calc_column] = (
+                col1 - col2
+            )
+
+        elif calc_operation == "Multiplication (*)":
+
+            updated_df[new_calc_column] = (
+                col1 * col2
+            )
+
+        elif calc_operation == "Division (/)":
+
+            updated_df[new_calc_column] = (
+                col1 / col2
+            )
+
+        # Reorder columns
+        cols = list(updated_df.columns)
+
+        cols.remove(new_calc_column)
+
+        cols.insert(
+            new_column_position - 1,
+            new_calc_column
+        )
+
+        updated_df = updated_df[cols]
+
+        st.session_state.workbook[
+            preview_sheet
+        ] = updated_df
+
+        st.success(
+            f"Calculated column "
+            f"'{new_calc_column}' created"
+        )
+
+        st.rerun()
+
+    st.divider()
+
+    # =========================================================
+    # ADD NEW ROWS
+    # =========================================================
+
+    st.subheader("Add New Rows")
+
+    num_rows = st.number_input(
+        "Number Of Rows To Add",
+        min_value=1,
+        value=1
+    )
+
+    if st.button("Add Rows"):
+
+        updated_df = df.copy()
+
+        empty_rows = pd.DataFrame(
+            [
+                {col: "" for col in updated_df.columns}
+                for _ in range(num_rows)
+            ]
+        )
+
+        updated_df = pd.concat(
+            [
+                updated_df,
+                empty_rows
+            ],
+            ignore_index=True
+        )
+
+        st.session_state.workbook[
+            preview_sheet
+        ] = updated_df
+
+        st.success(
+            f"{num_rows} rows added successfully"
+        )
+
+        st.rerun()
 
     st.divider()
 
@@ -105,7 +280,7 @@ def render_transform_page():
     if st.button("Apply Transformation"):
 
         if apply_scope == "Current Worksheet":
-            target_sheets = [selected_sheet]
+            target_sheets = [preview_sheet]
 
         elif apply_scope == "Selected Worksheets":
             target_sheets = selected_sheets
@@ -223,41 +398,15 @@ def render_transform_page():
             for item in column_config
         }
 
-        if apply_scope == "Current Worksheet":
-            target_sheets = [selected_sheet]
+        updated_df = df[ordered_columns]
 
-        elif apply_scope == "Selected Worksheets":
-            target_sheets = selected_sheets
+        updated_df = updated_df.rename(
+            columns=rename_mapping
+        )
 
-        else:
-            target_sheets = st.session_state.sheet_names
-
-        for sheet in target_sheets:
-
-            sheet_df = st.session_state.workbook[sheet]
-
-            valid_sheet_columns = [
-                col for col in ordered_columns
-                if col in sheet_df.columns
-            ]
-
-            updated_df = (
-                sheet_df[valid_sheet_columns]
-            )
-
-            applicable_rename_mapping = {
-                k: v
-                for k, v in rename_mapping.items()
-                if k in updated_df.columns
-            }
-
-            updated_df = updated_df.rename(
-                columns=applicable_rename_mapping
-            )
-
-            st.session_state.workbook[sheet] = (
-                updated_df
-            )
+        st.session_state.workbook[
+            preview_sheet
+        ] = updated_df
 
         st.success(
             "Columns Rearranged & Renamed Successfully"
@@ -301,7 +450,7 @@ def render_transform_page():
         )
 
         st.session_state.workbook[
-            selected_sheet
+            preview_sheet
         ] = updated_df
 
         st.success("Rows Sorted Successfully")
@@ -352,7 +501,6 @@ def render_transform_page():
 
             sheet_df = st.session_state.workbook[sheet]
 
-            # Remove AG Grid internal columns
             sheet_df = sheet_df.loc[
                 :,
                 ~sheet_df.columns.astype(str)
@@ -404,6 +552,6 @@ def render_transform_page():
     st.subheader("Current Worksheet Preview")
 
     st.dataframe(
-        st.session_state.workbook[selected_sheet],
+        st.session_state.workbook[preview_sheet],
         use_container_width=True
     )
