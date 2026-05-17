@@ -4,3 +4,4 @@ __pycache__/
 storage/uploads/
 storage/outputs/
 .env
+.streamlit/
